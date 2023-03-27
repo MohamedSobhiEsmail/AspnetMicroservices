@@ -27,14 +27,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
 
-  orderdb:
-    container_name: orderdb
+  orderdb2:
+    container_name: orderdb2
     environment:
         SA_PASSWORD: "123456"
         ACCEPT_EULA: "Y"
     restart: always
     ports:
-        - "1433:1433"
+        - "1435:1433"
 
   rabbitmq:
     container_name: rabbitmq
@@ -78,8 +78,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - "CasheSettings:ConnectionString=basketdb:6379"
       - "GrpcSettings:DiscountUrl=http://discount.grpc"
+      - "EventBusSettings:HostAddress=amqp://guest:guest@rabbitmq:5672"
     depends_on:
       - basketdb
+      - rabbitmq
     ports:
       - "8001:80"
 
@@ -109,10 +111,51 @@ services:
   ordering.api:
     container_name: ordering.api
     environment:
-      - "ConnectionStrings:OrderingConnectionString=server=orderdb; database=OrderDb;User Id=sa;Password=123456"
+      - "ConnectionStrings:OrderingConnectionString=server=orderdb2; database=OrderDb;User Id=sa;Password=123456"
       - ASPNETCORE_ENVIRONMENT=Development
+      - "EventBusSettings:HostAddress=amqp://guest:guest@rabbitmq:5672"
     depends_on:
-      - orderdb
+      - orderdb2
+      - rabbitmq
     ports:
       - "8004:80"
 
+  ocelotapigw:
+    container_name: ocelotapigw
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - catalog.api
+      - basket.api
+      - discount.api
+      - ordering.api
+    ports:
+      - "8010:80"
+
+  shopping.aggregator:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - "ApiSettings:CatalogUrl=http://catalog.api"
+      - "ApiSettings:BasketUrl=http://basket.api"
+      - "ApiSettings:OrderingUrl=http://ordering.api"
+    depends_on:
+      - catalog.api
+      - basket.api
+      - ordering.api
+    ports:
+      - "8005:80"
+
+
+  aspnetrunbasics:
+    container_name: aspnetrunbasics
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - "ApiSettings:GatewayAddress=http://ocelotapigw"
+    depends_on:
+      - ocelotapigw
+      - catalog.api
+      - basket.api
+      - discount.api
+      - ordering.api
+    ports:
+      - "8006:80"

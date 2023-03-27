@@ -1,4 +1,6 @@
+using AutoMapper;
 using Basket.API.GrpcServices;
+using Basket.API.Mapper;
 using Basket.API.Repositories;
 using Discount.Grpc.Protos;
 using MassTransit;
@@ -19,6 +21,13 @@ builder.Services.AddScoped<IBasketRepository, BasketRepository>();
 builder.Services.AddGrpcClient<DiscountProtoService.DiscountProtoServiceClient>(o=>
                                    o.Address=new Uri(builder.Configuration["GrpcSettings:DiscountURL"]));
 builder.Services.AddScoped<DiscountGrpcService>();
+builder.Services.AddAutoMapper(typeof(Program).Assembly);
+var mapperConfig = new MapperConfiguration(mc =>
+  {
+     mc.AddProfile(new BasketProfile());
+  });
+IMapper mapper = mapperConfig.CreateMapper();
+builder.Services.AddSingleton(mapper);
 builder.Services.AddMassTransit(config =>
 {
     config.UsingRabbitMq((ctx, cfg) =>
